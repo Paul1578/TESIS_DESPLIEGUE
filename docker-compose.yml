@@ -1,0 +1,91 @@
+x-mayan-container: &mayan-container
+  image: mayan-edms-preprod:4.11.5
+  build:
+    context: .
+    dockerfile: Dockerfile
+  env_file: .env
+  environment:
+    MAYAN_SECRET_KEY: "${MAYAN_SECRET_KEY:?DEFINE MAYAN_SECRET_KEY en .env}"
+    MAYAN_CELERY_BROKER_URL: redis://:${MAYAN_REDIS_PASSWORD:-mayanredispassword}@redis:6379/0
+    MAYAN_CELERY_RESULT_BACKEND: redis://:${MAYAN_REDIS_PASSWORD:-mayanredispassword}@redis:6379/1
+    MAYAN_LOCK_MANAGER_BACKEND: mayan.apps.lock_manager.backends.redis_lock.RedisLock
+    MAYAN_LOCK_MANAGER_BACKEND_ARGUMENTS: "{'redis_url':'redis://:${MAYAN_REDIS_PASSWORD:-mayanredispassword}@redis:6379/2'}"
+    MAYAN_DATABASES: "{'default':{'ENGINE':'django.db.backends.postgresql','NAME':'${MAYAN_DATABASE_NAME:-mayan}','PASSWORD':'${MAYAN_DATABASE_PASSWORD:-mayandbpass}','USER':'${MAYAN_DATABASE_USER:-mayan}','HOST':'${MAYAN_DATABASE_HOST:-postgresql}'}}"
+    MAYAN_DEFAULT_FROM_EMAIL: ${MAYAN_DEFAULT_FROM_EMAIL:-mayan@localhost}
+    MAYAN_EMAIL_BACKEND: ${MAYAN_EMAIL_BACKEND:-django.core.mail.backends.smtp.EmailBackend}
+    MAYAN_EMAIL_HOST: ${MAYAN_EMAIL_HOST:-mailpit}
+    MAYAN_EMAIL_HOST_PASSWORD: ${MAYAN_EMAIL_HOST_PASSWORD:-}
+    MAYAN_EMAIL_HOST_USER: ${MAYAN_EMAIL_HOST_USER:-}
+    MAYAN_EMAIL_PORT: ${MAYAN_EMAIL_PORT:-1025}
+    MAYAN_EMAIL_USE_TLS: ${MAYAN_EMAIL_USE_TLS:-false}
+    MAYAN_LANGUAGE_CODE: ${MAYAN_LANGUAGE_CODE:-es}
+    MAYAN_TIME_ZONE: ${MAYAN_TIME_ZONE:-America/Guayaquil}
+    MAYAN_DOCKER_WAIT: ${MAYAN_DOCKER_WAIT:-postgresql:5432 redis:6379 mailpit:1025}
+  networks:
+    - mayan
+  restart: unless-stopped
+  volumes:
+    - app_data:/var/lib/mayan
+
+networks:
+  mayan:
+    driver: bridge
+
+services:
+  app:
+    <<: *mayan-container
+    depends_on:
+      - postgresql
+      - redis
+      - mailpit
+    ports:
+      - "${MAYAN_HTTP_PORT:-80}:8000"
+
+  postgresql:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${MAYAN_DATABASE_NAME:-mayan}
+      POSTGRES_PASSWORD: ${MAYAN_DATABASE_PASSWORD:-mayandbpass}
+      POSTGRES_USER: ${MAYAN_DATABASE_USER:-mayan}
+    networks:
+      - mayan
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    command:
+      - redis-server
+      - --appendonly
+      - "no"
+      - --databases
+      - "3"
+      - --maxmemory
+      - "100mb"
+      - --maxclients
+      - "500"
+      - --maxmemory-policy
+      - "allkeys-lru"
+      - --save
+      - ""
+      - --requirepass
+      - "${MAYAN_REDIS_PASSWORD:-mayanredispassword}"
+    image: redis:7-alpine
+    networks:
+      - mayan
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"
+    networks:
+      - mayan
+    restart: unless-stopped
+
+volumes:
+  app_data:
+  postgres_data:
+  redis_data:
