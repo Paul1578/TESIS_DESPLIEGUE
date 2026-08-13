@@ -28,14 +28,18 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Nombre de imagen en minusculas (GHCR lo exige)
+        id: meta
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
       - name: Build y push de la imagen (con parches)
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/mayan-edms-preprod:preprod-latest
-            ghcr.io/${{ github.repository_owner }}/mayan-edms-preprod:${{ github.sha }}
+            ghcr.io/${{ steps.meta.outputs.owner }}/mayan-edms-preprod:preprod-latest
+            ghcr.io/${{ steps.meta.outputs.owner }}/mayan-edms-preprod:${{ github.sha }}
 
   deploy:
     name: Desplegar en preproduccion
