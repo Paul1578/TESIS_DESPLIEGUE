@@ -1,0 +1,101 @@
+name: Deploy Preproduccion
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-preprod-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build y push a GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Login a GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build y push de la imagen (con parches)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/mayan-edms-preprod:preprod-latest
+            ghcr.io/${{ github.repository_owner }}/mayan-edms-preprod:${{ github.sha }}
+
+  deploy:
+    name: Desplegar en preproduccion
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validar secretos
+        env:
+          PREPROD_HOST: ${{ secrets.PREPROD_HOST }}
+          PREPROD_USER: ${{ secrets.PREPROD_USER }}
+          PREPROD_SSH_KEY: ${{ secrets.PREPROD_SSH_KEY }}
+          PREPROD_PATH: ${{ secrets.PREPROD_PATH }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+        run: |
+          for var in PREPROD_HOST PREPROD_USER PREPROD_SSH_KEY PREPROD_PATH GHCR_PAT; do
+            if [ -z "${!var}" ]; then
+              echo "Falta el secreto $var. Configuralo en Settings > Secrets and variables > Actions." >&2
+              exit 1
+            fi
+          done
+
+      - name: Desplegar via SSH
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.PREPROD_HOST }}
+          username: ${{ secrets.PREPROD_USER }}
+          key: ${{ secrets.PREPROD_SSH_KEY }}
+          port: ${{ secrets.PREPROD_PORT || '22' }}
+          command_timeout: 30m
+          script: |
+            set -e
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+            cd "${{ secrets.PREPROD_PATH }}"
+            git pull --ff-only
+            if [ ! -f .env ]; then
+              echo "ERROR: no existe .env en el servidor." >&2
+              echo "Crealo una sola vez: cp .env.example .env y completa los valores." >&2
+              exit 1
+            fi
+            docker compose pull
+            docker compose up -d
+            docker image prune -f
+
+      - name: Healthcheck
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.PREPROD_HOST }}
+          username: ${{ secrets.PREPROD_USER }}
+          key: ${{ secrets.PREPROD_SSH_KEY }}
+          port: ${{ secrets.PREPROD_PORT || '22' }}
+          command_timeout: 5m
+          script: |
+            port="${{ secrets.PREPROD_HTTP_PORT || '80' }}"
+            for i in $(seq 1 30); do
+              code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${port}/" || true)
+              if [ "${code}" = "200" ]; then
+                echo "OK - Mayan respondiendo HTTP 200"
+                exit 0
+              fi
+              sleep 10
+            done
+            echo "Healthcheck fallo: Mayan no respondio HTTP 200 en ${port}" >&2
+            exit 1

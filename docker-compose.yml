@@ -1,5 +1,5 @@
 x-mayan-container: &mayan-container
-  image: mayan-edms-preprod:4.11.5
+  image: ${MAYAN_IMAGE:-ghcr.io/paul1578/mayan-edms-preprod:preprod-latest}
   build:
     context: .
     dockerfile: Dockerfile
