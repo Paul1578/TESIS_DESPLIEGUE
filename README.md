@@ -8,6 +8,33 @@ Mailpit (SMTP de prueba) y una imagen construida con parches locales.
 
 ---
 
+## Instalación automática (todo el proceso en 1 comando)
+
+En una máquina nueva (Ubuntu/Debian, aún sin Docker), descarga y ejecuta:
+
+```
+curl -fsSL https://raw.githubusercontent.com/Paul1578/TESIS_DESPLIEGUE/main/scripts/instalar.sh -o instalar.sh
+bash instalar.sh
+```
+
+Ese script hace los pasos 1 a 5 del manual automáticamente e **idempotente**
+(vuelve a ejecutarlo las veces que quieras; no duplica nada): instala
+git/make/Docker, crea `/mnt/escaner`, clona el repo, genera el `.env`
+(secret key + password admin + CSRF con tu IP), levanta el stack, espera a que
+Mayan responda y verifica la siembra.
+
+Variantes:
+
+```
+INSTALL_ADMIN_PASSWORD=MiClaveSegura bash instalar.sh      # no pregunta nada
+INSTALL_CSRF_ORIGINS=192.168.1.50 bash instalar.sh         # fuerza la IP del CSRF
+bash instalar.sh --skip-prereqs                            # si ya tienes todo instalado
+```
+
+Si ya clonaste el repo, alcanza con: `make install`.
+
+---
+
 ## 1. Requisitos
 
 En la máquina destino (local o servidor):

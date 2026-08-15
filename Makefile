@@ -6,10 +6,13 @@
 SHELL := /bin/bash
 COMPOSE := docker compose
 
-.PHONY: help build up down stop restart status ps logs pull login deploy clean
+.PHONY: help install build up down stop restart status ps logs pull login deploy clean
 
 help: ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
+
+install: ## Instalacion desde cero (requisitos, .env, stack): primera vez
+	bash scripts/instalar.sh
 
 build: ## Construye la imagen local con los parches y levanta
 	$(COMPOSE) up -d --build
