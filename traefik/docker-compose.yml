@@ -22,6 +22,8 @@ services:
       # Logs
       - --log.level=${LOG_LEVEL:-INFO}
       - --accesslog=true
+      # Habilita el endpoint de ping usado por el healthcheck
+      - --ping=true
     ports:
       - "80:80"
       - "443:443"

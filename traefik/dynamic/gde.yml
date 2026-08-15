@@ -1,6 +1,7 @@
 # Configuracion dinamica: routers, middlewares y servicios
-# Backend por defecto: http://161.97.140.245:1987
-# (cambia esta URL si la app corre en otro host/puerto, ej. app:8000 en la misma red)
+# Backend: nginx del stack Mayan de este repo (traefik/dynamic) que publica
+# MAYAN_HTTP_PORT=1987 en el host. Se alcanza por el gateway de Docker
+# (172.17.0.1) porque Traefik corre en la misma maquina que la app.
 
 http:
   middlewares:
@@ -38,13 +39,9 @@ http:
       service: herramientagde-svc
       tls:
         certResolver: letsencrypt
-        domains:
-          - main: byronrm.com
-            sans:
-              - herramientagde.byronrm.com
 
   services:
     herramientagde-svc:
       loadBalancer:
         servers:
-          - url: "http://161.97.140.245:1987"
+          - url: "http://172.17.0.1:1987"

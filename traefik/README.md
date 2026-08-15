@@ -1,7 +1,11 @@
 # Traefik — gateway para herramientagde.byronrm.com
 
-Expone la app que corre en `http://161.97.140.245:1987` por HTTPS en el
-subdominio `https://herramientagde.byronrm.com` (certificado Let's Encrypt).
+Expone el stack Mayan de este repo por HTTPS en el subdominio
+`https://herramientagde.byronrm.com` (certificado Let's Encrypt).
+
+- Backend: `nginx` del stack Mayan, que publica `MAYAN_HTTP_PORT=1987` en el
+  host. Traefik corre en la misma maquina y lo alcanza por el gateway de
+  Docker: `http://172.17.0.1:1987` (`dynamic/gde.yml`).
 
 ## Requisitos previos
 
@@ -12,14 +16,23 @@ subdominio `https://herramientagde.byronrm.com` (certificado Let's Encrypt).
    (TCP). Verificar con `sudo ufw allow 80/tcp && sudo ufw allow 443/tcp`
    (o el firewall que uses).
 3. Docker Engine + Compose v2 instalados.
+4. El stack Mayan debe estar levantado con `MAYAN_HTTP_PORT=1987` en su `.env`
+   (ver README principal, seccion 3).
 
 ## Configuracion
 
 ```bash
-cd traefik-gde
+cd traefik
 cp .env.example .env          # editar ACME_EMAIL (tu correo real)
-# si la app no esta en 161.97.140.245:1987, cambiar la URL en dynamic/gde.yml
 ```
+
+En el `.env` de Mayan agregar el nuevo origen (ver `.env.example` del repo):
+
+```
+MAYAN_CSRF_TRUSTED_ORIGINS=['https://herramientagde.byronrm.com']
+```
+
+y recargar el stack (`make restart`) para que lo tome.
 
 ## Puesta en marcha
 
@@ -40,10 +53,8 @@ curl -I https://herramientagde.byronrm.com                   # 200/302 tras emit
 - Redireccion automatica HTTP → HTTPS (entrypoint `web`).
 - Renovacion automatica de certificados (ACME). El cert solo se genera cuando
   el DNS resuelve al IP y el puerto 80 es alcanzable desde internet.
-- Si `http://161.97.140.245:1987` es el propio host (hairpin) y da problemas,
-  cambiar la URL en `dynamic/gde.yml` a `http://172.17.0.1:1987` (gateway de Docker).
-- La app en :1987 debe aceptar el origen `https://herramientagde.byronrm.com`
-  (en Mayan: agregarlo a `MAYAN_CSRF_TRUSTED_ORIGINS` y `MAYAN_ALLOWED_HOSTS`).
+- El backend usa `172.17.0.1:1987` (gateway de Docker) para evitar hairpin por
+  la IP publica; funciona porque `nginx` del stack publica 1987 en el host.
 
 ## Archivos
 
