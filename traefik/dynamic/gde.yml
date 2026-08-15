@@ -1,0 +1,50 @@
+# Configuracion dinamica: routers, middlewares y servicios
+# Backend por defecto: http://161.97.140.245:1987
+# (cambia esta URL si la app corre en otro host/puerto, ej. app:8000 en la misma red)
+
+http:
+  middlewares:
+    redirect-to-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+    security-headers:
+      headers:
+        frameDeny: true
+        sslRedirect: true
+        browserXssFilter: true
+        contentTypeNosniff: true
+        stsIncludeSubdomains: true
+        stsPreload: true
+        stsSeconds: 31536000
+        customFrameOptionsValue: "SAMEORIGIN"
+
+  routers:
+    herramientagde-http:
+      rule: "Host(`herramientagde.byronrm.com`)"
+      entryPoints:
+        - web
+      middlewares:
+        - redirect-to-https
+      priority: 10
+
+    herramientagde:
+      rule: "Host(`herramientagde.byronrm.com`)"
+      entryPoints:
+        - websecure
+      middlewares:
+        - security-headers
+      service: herramientagde-svc
+      tls:
+        certResolver: letsencrypt
+        domains:
+          - main: byronrm.com
+            sans:
+              - herramientagde.byronrm.com
+
+  services:
+    herramientagde-svc:
+      loadBalancer:
+        servers:
+          - url: "http://161.97.140.245:1987"

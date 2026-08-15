@@ -1,1 +1,7 @@
 .env
+
+# Artefactos de python
+__pycache__/
+
+# Certificados de Traefik (no versionar claves privadas)
+traefik/acme.json
