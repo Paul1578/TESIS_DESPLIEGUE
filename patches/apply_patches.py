@@ -3,7 +3,7 @@ import pathlib
 PATCHES = [
     {
         'path': pathlib.Path('/opt/mayan-edms/lib/python3.13/site-packages/mayan/apps/authentication/views/authentication_views.py'),
-        'marker': 'queryset = self.object_list',
+        'marker': 'result = super().dispatch(request=request, *args, **kwargs)\n\n        queryset = self.object_list',
         'old': '        queryset = self.get_queryset(\n            source_queryset=get_all_users_queryset()\n        )',
         'new': '        queryset = self.object_list',
     },

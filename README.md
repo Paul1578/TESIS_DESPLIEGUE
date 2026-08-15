@@ -112,6 +112,18 @@ git pull
 make deploy       # = git pull + docker compose pull + up -d + limpiar imagenes viejas
 ```
 
+### Estructura documental (siembra automática)
+
+En el primer arranque un servicio `seed` crea tipos de documento, metadatos e
+índices definidos en `scripts/seed_taxonomy.py` (edita la sección `EDITAR`
+con la taxonomía real antes de desplegar). No se repite en arranques
+posteriores. Para volver a sembrar:
+
+```
+make seed          # idempotente: no duplica lo que ya existe
+make seed-force    # borra el marcador y siembra de nuevo
+```
+
 ### Otros comandos útiles
 
 ```
@@ -136,3 +148,49 @@ del `.env`.
 
 > El primer arranque ejecuta migraciones y crea el admin; puede tardar varios
 > minutos. Espera hasta que `make logs` deje de mostrar "success: ... RUNNING".
+
+---
+
+## 6. Configuración avanzada
+
+### OCR en español
+El stack instala Tesseract con español al arrancar (sin reconstruir la imagen)
+y lo deja como idioma por defecto:
+```
+MAYAN_APT_INSTALLS=tesseract-ocr-spa
+MAYAN_OCR_LANGUAGE=spa
+```
+
+### Ingesta por carpeta (Watch Folder)
+Los PDFs que caigan en `WATCH_FOLDER` del host se montan en
+`/var/lib/mayan/watch_folder` del contenedor. Para activarlo:
+
+1. Crea la carpeta en el servidor: `sudo mkdir -p /mnt/escaner`.
+2. En Mayan: **Sources → Create source → Watch Folder**, apuntando a
+   `/var/lib/mayan/watch_folder` (dentro del contenedor).
+3. Copia los PDFs a `/mnt/escaner` y Mayan los ingesta automáticamente.
+
+Si el escáner escribe por red (SMB/NFS), monta el recurso en el host primero
+y luego la variable `WATCH_FOLDER` debe apuntar al punto de montaje.
+
+### Reverse proxy (Nginx) y tamaño de subida
+El stack incluye un Nginx delante de Mayan (`MAYAN_HTTP_PORT` es el puerto
+expuesto). Permite subidas de hasta **500 MB** (`client_max_body_size` en
+`nginx/default.conf`). El túnel de Cloudflare gratuito limita las subidas a
+~100 MB; documentos más pesados funcionan por la red local pero no por el túnel.
+
+### Correo (SMTP)
+Por defecto usa **Mailpit** (SMTP de prueba): los correos no salen a nadie y
+se ven en `http://IP:8025`. Para enviar correos reales con Gmail:
+
+1. En tu cuenta de Google activa la **verificación en 2 pasos**.
+2. Genera un **password de aplicación** (Google → Seguridad → Passwords de aplicaciones).
+3. En el `.env`, descomenta y completa el bloque Gmail (ver `.env.example`).
+
+### Acceso desde fuera (túnel Cloudflare)
+```
+cloudflared tunnel --url http://127.0.0.1:MAYAN_HTTP_PORT
+```
+Da una URL `https://xxx.trycloudflare.com`. Configura
+`MAYAN_CSRF_TRUSTED_ORIGINS` en el `.env` con esa URL (ver `.env.example`).
+Es un *quick tunnel*: la URL cambia en cada reinicio del servicio.

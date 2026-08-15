@@ -45,5 +45,12 @@ deploy: ## Sincroniza repo, baja la imagen nueva y levanta (lo que hace el pipel
 	$(COMPOSE) up -d
 	$(COMPOSE) image prune -f
 
+seed: ## Sembrar estructura documental (idempotente; corre solo el primer arranque)
+	$(COMPOSE) run --rm seed
+
+seed-force: ## Re-sembrar la estructura (borra el marcador y vuelve a correr)
+	$(COMPOSE) run --rm --entrypoint /bin/bash seed -c 'rm -f /var/lib/mayan/seed_done'
+	$(COMPOSE) run --rm seed
+
 clean: ## Elimina contenedores Y VOLUMENES (borra documentos y BD). CUIDADO
 	$(COMPOSE) down -v
