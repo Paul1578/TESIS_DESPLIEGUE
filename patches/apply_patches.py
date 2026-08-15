@@ -13,6 +13,64 @@ PATCHES = [
         'old': '</style>',
         'new': '</style>\n\n<style>\n    /* fix-layout */\n    .table-responsive,\n    .well,\n    .list-group {\n        overflow-x: auto !important;\n    }\n</style>',
     },
+    {
+        'path': pathlib.Path('/opt/mayan-edms/lib/python3.13/site-packages/mayan/apps/appearance/templates/appearance/app/head.html'),
+        'marker': 'appearance-dropdown-fix',
+        'old': '</style>',
+        'new': '''</style>
+
+<style>
+    /* appearance-dropdown-fix */
+    .table-responsive:has(.dropdown.open),
+    .well:has(.dropdown.open),
+    .list-group:has(.dropdown.open),
+    .modal:has(.dropdown.open) {
+        overflow: visible !important;
+    }
+
+    .dropdown-menu {
+        z-index: 1030;
+    }
+</style>''',
+    },
+    {
+        'path': pathlib.Path('/opt/mayan-edms/lib/python3.13/site-packages/mayan/apps/appearance/templates/appearance/app/foot.html'),
+        'marker': 'appearance-dropdown-right-align',
+        'old': '''<script src="{% static 'appearance/js/partial_navigation.js' %}" type="text/javascript"></script>''',
+        'new': '''<script src="{% static 'appearance/js/partial_navigation.js' %}" type="text/javascript"></script>
+
+<script>
+(function ($) {
+    'use strict';
+
+    const positionDropdownMenu = function ($dropdown) {
+        const $menu = $dropdown.children('.dropdown-menu');
+        if (!$menu.length) {
+            return;
+        }
+        $menu.removeClass('dropdown-menu-right');
+        const menuRight = $menu.offset().left + $menu.outerWidth();
+        if (menuRight > window.scrollX + window.innerWidth - 10) {
+            $menu.addClass('dropdown-menu-right');
+        }
+    };
+
+    $(document).on('shown.bs.dropdown', '.dropdown', function () {
+        positionDropdownMenu($(this));
+    });
+
+    $(document).on('hidden.bs.dropdown', '.dropdown', function () {
+        $(this).children('.dropdown-menu').removeClass('dropdown-menu-right');
+    });
+
+    $(window).on('resize', function () {
+        $('.dropdown.open').each(function () {
+            positionDropdownMenu($(this));
+        });
+    });
+})(jQuery);
+</script>''',
+    },
 ]
 
 
