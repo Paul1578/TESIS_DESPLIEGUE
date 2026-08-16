@@ -84,6 +84,19 @@ install_prereqs() {
   fi
 }
 
+# ---------- Paso 0b ----------
+check_memory() {
+  local mem_kb swap_kb total_mb
+  mem_kb="$(awk '/MemTotal/{print $2}' /proc/meminfo)"
+  swap_kb="$(awk '/SwapTotal/{print $2}' /proc/meminfo)"
+  total_mb=$(( (mem_kb + swap_kb) / 1024 ))
+  if [ "$total_mb" -lt 3072 ]; then
+    fail "Poca memoria: ${total_mb}MB (RAM+swap). Mayan muere (OOM) al migrar la primera vez. Activa swap primero."
+  elif [ "$total_mb" -lt 4096 ]; then
+    warn "Memoria justa (${total_mb}MB RAM+swap). Si un contenedor muere con exit 137, activa swap (ver README)."
+  fi
+}
+
 # ---------- Paso 1 ----------
 setup_watch_folder() {
   if [ ! -d "$WATCH_FOLDER" ]; then
@@ -304,6 +317,7 @@ main() {
   detect_docker_access
   [ -n "$DOCK" ] || fail "No se pudo acceder a docker (probá de nuevo tras re-logear al grupo docker)."
 
+  check_memory
   setup_watch_folder
   clone_repo
   configure_env
