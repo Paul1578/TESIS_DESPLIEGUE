@@ -18,6 +18,8 @@ ENV_FILE="${ENV_FILE:-$ROOT/.env}"
 [ -f "$STACK_FILE" ] || { echo "ERROR: no existe $STACK_FILE" >&2; exit 1; }
 
 while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#"${line%%[![:space:]]*}"}"   # quita espacios iniciales
+    line="${line%"${line##*[![:space:]]}"}"   # quita espacios finales
     case "$line" in
         '#'*|'') continue ;;
     esac
