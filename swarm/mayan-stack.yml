@@ -1,3 +1,5 @@
+version: "3.8"
+
 # Despliegue en Swarm para hosts que YA tienen un Traefik Swarm en 80/443
 # (ej. el servidor Contabo 161.97.140.245). El Traefik del host es v2.7,
 # providers.docker swarmMode, ruteo por labels.

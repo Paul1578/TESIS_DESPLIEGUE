@@ -6,7 +6,7 @@
 SHELL := /bin/bash
 COMPOSE := docker compose
 
-.PHONY: help install build up down stop restart status ps logs pull login deploy clean
+.PHONY: help install build up down stop restart status ps logs pull login deploy stack-deploy seed seed-force clean
 
 help: ## Muestra esta ayuda
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2}'
@@ -47,6 +47,9 @@ deploy: ## Sincroniza repo, baja la imagen nueva y levanta (lo que hace el pipel
 	$(COMPOSE) pull
 	$(COMPOSE) up -d
 	$(COMPOSE) image prune -f
+
+stack-deploy: ## Despliega en un host Swarm con Traefik existente (carga .env seguro)
+	bash scripts/stack_deploy.sh
 
 seed: ## Sembrar estructura documental (idempotente; corre solo el primer arranque)
 	$(COMPOSE) run --rm seed

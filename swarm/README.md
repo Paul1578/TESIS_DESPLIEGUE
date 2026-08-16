@@ -9,7 +9,7 @@
 > y que rutean **por labels** (`providers.docker` con `swarmMode: true`).
 > Aqui el stack de Mayan se desplega como servicio de Swarm y el Traefik del
 > host lo expone en `https://${MAYAN_DOMAIN}` (se toma de `MAYAN_DOMAIN` en el
-> `.env`; exportalo antes de desplegar con `set -a; source .env; set +a`).
+> `.env`; el script `scripts/stack_deploy.sh` lo exporta de forma segura).
 
 ## 1. Estado actual del Traefik del host (verificado)
 
@@ -47,9 +47,15 @@ nano .env
 
 Valores minimos:
 
-- `MAYAN_SECRET_KEY` (generar con `openssl rand -base64 64`)
+- `MAYAN_SECRET_KEY` (generar con `openssl rand -base64 64 | tr -d '\n'` — el
+  `tr` es IMPORTANTE: sin el, base64 se corta en 2 lineas y rompe el `.env`)
 - `MAYAN_AUTOADMIN_PASSWORD` (password del admin inicial)
 - `MAYAN_CSRF_TRUSTED_ORIGINS=['https://herramientagde.byronrm.com', 'http://161.97.140.245:1987']`
+
+> **Ojo con `source .env`:** NO uses `set -a; source .env` para exportar. Varios
+> valores (CSRF, `MAYAN_DOCKER_WAIT`, password de Gmail) contienen espacios y
+> bash los rompe en varios "comandos". El paso 5 usa un script que los exporta
+> bien.
 
 ## 4. Crear la carpeta de ingesta (/mnt/escaner)
 
@@ -61,13 +67,19 @@ docker run --rm -v /mnt:/host alpine sh -c "mkdir -p /host/escaner && chmod 777 
 
 ## 5. Desplegar el stack
 
-`docker stack deploy` no lee `.env` por si solo; se exportan las variables primero:
+`docker stack deploy` no lee `.env` por si solo. El script `scripts/stack_deploy.sh`
+exporta las variables de forma segura (maneja espacios y comillas) y despliega:
 
 ```bash
 cd ~/mayan-docker
-set -a; source .env; set +a
-docker stack deploy -c swarm/mayan-stack.yml mayan
+bash scripts/stack_deploy.sh          # o: make stack-deploy
 ```
+
+> **Solucion de problemas:** si el deploy anterior fallo, revisa que `.env` no
+> tenga la secret key partida en 2 lineas (debe ser UNA linea) y que no sobre
+> ninguna linea suelta sin `=` (el script las avisa como "AVISO: linea ignorada").
+> El error `unsupported Compose file version: 1.0` ocurria por falta de
+> `version:` en el stack; ya esta corregido en `swarm/mayan-stack.yml`.
 
 ## 6. Verificar
 
@@ -93,6 +105,5 @@ El certificado se emite solo cuando el DNS resuelve (ya resuelve a
   el Traefik Swarm y `swarmMode` no descubre contenedores de compose).
 - El servicio `nginx` publica el puerto host 1987 solo como acceso LAN de
   respaldo; el trafico publico entra por Traefik (80/443).
-- Para actualizar: `git pull`, `set -a; source .env; set +a`,
-  `docker stack deploy -c swarm/mayan-stack.yml mayan` (vuelve a sembrar de
-  forma idempotente si hace falta).
+- Para actualizar: `git pull`, `bash scripts/stack_deploy.sh` (vuelve a sembrar
+  de forma idempotente si hace falta).
