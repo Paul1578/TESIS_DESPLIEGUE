@@ -42,7 +42,7 @@ x-mayan: &mayan
     MAYAN_EMAIL_USE_TLS: ${MAYAN_EMAIL_USE_TLS:-false}
     MAYAN_LANGUAGE_CODE: ${MAYAN_LANGUAGE_CODE:-es}
     MAYAN_TIME_ZONE: ${MAYAN_TIME_ZONE:-America/Guayaquil}
-    MAYAN_DOCKER_WAIT: ${MAYAN_DOCKER_WAIT:-postgresql:5432 redis:6379 mailpit:1025}
+    MAYAN_DOCKER_WAIT: ${MAYAN_DOCKER_WAIT:-postgresql:5432 redis:6379}
     MAYAN_APT_INSTALLS: ${MAYAN_APT_INSTALLS:-tesseract-ocr-spa}
     MAYAN_OCR_LANGUAGE: ${MAYAN_OCR_LANGUAGE:-spa}
   healthcheck:
