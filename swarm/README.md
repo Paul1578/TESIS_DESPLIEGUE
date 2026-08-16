@@ -68,7 +68,10 @@ docker run --rm -v /mnt:/host alpine sh -c "mkdir -p /host/escaner && chmod 777 
 ## 5. Desplegar el stack
 
 `docker stack deploy` no lee `.env` por si solo. El script `scripts/stack_deploy.sh`
-exporta las variables de forma segura (maneja espacios y comillas) y despliega:
+exporta las variables de forma segura (maneja espacios y comillas) y **valida antes
+de desplegar**: rechaza `.env` con comentarios pegados (`#` dentro del valor),
+variables obligatorias faltantes, `MAYAN_DOCKER_WAIT` invalido, y aborta si hay
+menos de 3 GB de RAM+swap (evita el OOM del primer arranque). Uso:
 
 ```bash
 cd ~/mayan-docker

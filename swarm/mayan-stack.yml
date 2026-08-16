@@ -20,8 +20,7 @@ version: "3.8"
 #
 # Desplegar:
 #   cd ~/mayan-docker
-#   set -a; source .env; set +a
-#   docker stack deploy -c swarm/mayan-stack.yml mayan
+#   bash scripts/stack_deploy.sh   # valida .env y memoria, y desplega
 
 x-mayan: &mayan
   image: ghcr.io/paul1578/mayan-edms-preprod:latest
