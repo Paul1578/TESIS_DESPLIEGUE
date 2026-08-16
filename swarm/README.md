@@ -1,10 +1,15 @@
-# Despliegue en Swarm (servidor Contabo 161.97.140.245 / vmi1469533)
+# Despliegue en Swarm con Traefik Swarm existente
 
-Este servidor **ya tiene un Traefik de Swarm** (v2.7) que es el gateway de los
-puertos 80/443 y rutea **por labels** (`providers.docker` con `swarmMode: true`).
-Por eso NO se usa `traefik/` (que es un Traefik standalone para servidores sin
-gateway). Aqui el stack de Mayan se desplega como servicio de Swarm y el Traefik
-existente lo expone como `https://herramientagde.byronrm.com`.
+> **Alternativa al stack compose principal.** El despliegue reproducible
+> recomendado es `docker-compose.yml` (incluye su propio Traefik y funciona en
+> CUALQUIER servidor, con o sin Traefik previo; ver README raiz).
+>
+> Este `swarm/` es SOLO para hosts que ya tienen un Traefik de Swarm ocupando
+> los puertos 80/443 (caso del servidor Contabo `161.97.140.245 / vmi1469533`)
+> y que rutean **por labels** (`providers.docker` con `swarmMode: true`).
+> Aqui el stack de Mayan se desplega como servicio de Swarm y el Traefik del
+> host lo expone en `https://${MAYAN_DOMAIN}` (se toma de `MAYAN_DOMAIN` en el
+> `.env`; exportalo antes de desplegar con `set -a; source .env; set +a`).
 
 ## 1. Estado actual del Traefik del host (verificado)
 

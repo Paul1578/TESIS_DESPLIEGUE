@@ -1,16 +1,20 @@
-# Despliegue en Swarm para el servidor Contabo (161.97.140.245 / vmi1469533)
-# con Traefik Swarm EXISTENTE (v2.7, providers.docker swarmMode, ruteo por labels).
+# Despliegue en Swarm para hosts que YA tienen un Traefik Swarm en 80/443
+# (ej. el servidor Contabo 161.97.140.245). El Traefik del host es v2.7,
+# providers.docker swarmMode, ruteo por labels.
+#
+# Es la ALTERNATIVA al stack compose principal (docker-compose.yml, con Traefik
+# integrado) para cuando el host ya ocupa 80/443 con su propio Traefik.
 #
 # El Traefik del host rutea por labels:
-#   herramientagde.byronrm.com -> nginx (red traefik-public, puerto interno 80)
+#   ${MAYAN_DOMAIN} -> nginx (red traefik-public, puerto interno 80)
 # y emite el certificado con el resolver `http` (httpChallenge en :80).
 #
 # Requisitos en el host (ver swarm/README.md):
-#   1. Red overlay `traefik-public` existente (ya esta).
+#   1. Red overlay `traefik-public` existente.
 #   2. Corregir el typo del traefik.yml del host: traefik-pubic -> traefik-public.
 #   3. Carpeta /mnt/escaner creada en el host.
 #   4. `.env` en la raiz del repo con MAYAN_SECRET_KEY, MAYAN_AUTOADMIN_PASSWORD
-#      y MAYAN_CSRF_TRUSTED_ORIGINS incluyendo https://herramientagde.byronrm.com.
+#      y MAYAN_CSRF_TRUSTED_ORIGINS incluyendo https://${MAYAN_DOMAIN}.
 #
 # Desplegar:
 #   cd ~/mayan-docker
@@ -71,13 +75,13 @@ services:
       labels:
         traefik.enable: "true"
         traefik.docker.network: "traefik-public"
-        traefik.http.routers.mayan-http.rule: "Host(`herramientagde.byronrm.com`)"
+        traefik.http.routers.mayan-http.rule: "Host(`${MAYAN_DOMAIN}`)"
         traefik.http.routers.mayan-http.entrypoints: "http"
         traefik.http.routers.mayan-http.middlewares: "mayan-redirect"
         traefik.http.routers.mayan-http.service: "mayan"
         traefik.http.middlewares.mayan-redirect.redirectscheme.scheme: "https"
         traefik.http.middlewares.mayan-redirect.redirectscheme.permanent: "true"
-        traefik.http.routers.mayan.rule: "Host(`herramientagde.byronrm.com`)"
+        traefik.http.routers.mayan.rule: "Host(`${MAYAN_DOMAIN}`)"
         traefik.http.routers.mayan.entrypoints: "https"
         traefik.http.routers.mayan.tls: "true"
         traefik.http.routers.mayan.tls.certresolver: "http"

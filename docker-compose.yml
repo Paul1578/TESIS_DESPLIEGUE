@@ -1,3 +1,25 @@
+# =====================================================================
+# TESIS_DESPLIEGUE - Mayan EDMS + Traefik (despliegue reproducible)
+#
+# Stack unico, reproducible en CUALQUIER servidor (tenga o no Traefik):
+#   - traefik   : gateway HTTPS (Let's Encrypt). Rutas por labels de docker.
+#   - nginx     : reverse proxy interno hacia la app + puerto LAN.
+#   - app       : Mayan EDMS (Django/Gunicorn) + OCR espanol.
+#   - postgresql, redis, mailpit, seed.
+#
+# Configuracion via .env:
+#   MAYAN_DOMAIN         -> subdominio/dominio publico (vaciar para solo LAN)
+#   TRAEFIK_HTTP_PORT    -> puerto host del entrypoint http (default 80)
+#   TRAEFIK_HTTPS_PORT   -> puerto host del entrypoint https (default 443)
+#   ACME_EMAIL           -> correo para Let's Encrypt
+#   MAYAN_HTTP_PORT      -> puerto LAN del nginx (default 1987)
+#   WATCH_FOLDER         -> carpeta de ingesta del escaner (default /mnt/escaner)
+#
+# Si el host YA tiene algo en 80/443 (ej. un Traefik/Swarm previo), cambia
+# TRAEFIK_HTTP_PORT / TRAEFIK_HTTPS_PORT a puertos libres, o usa swarm/
+# (integracion con el Traefik Swarm existente del host).
+# =====================================================================
+
 x-mayan-container: &mayan-container
   image: ${MAYAN_IMAGE:-ghcr.io/paul1578/mayan-edms-preprod:latest}
   build:
@@ -40,7 +62,46 @@ networks:
   mayan:
     driver: bridge
 
+volumes:
+  app_data:
+  postgres_data:
+  redis_data:
+  traefik_acme:
+
 services:
+  traefik:
+    image: traefik:v3
+    restart: unless-stopped
+    command:
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.web.http.redirections.entrypoint.permanent=true
+      - --entrypoints.websecure.address=:443
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=mayan
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@localhost}
+      - --certificatesresolvers.letsencrypt.acme.storage=/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --ping=true
+      - --log.level=${LOG_LEVEL:-INFO}
+      - --accesslog=true
+    ports:
+      - "${TRAEFIK_HTTP_PORT:-80}:80"
+      - "${TRAEFIK_HTTPS_PORT:-443}:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_acme:/acme.json
+    networks:
+      - mayan
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   app:
     <<: *mayan-container
     depends_on:
@@ -54,12 +115,27 @@ services:
       app:
         condition: service_healthy
     ports:
-      - "${MAYAN_HTTP_PORT:-80}:80"
+      - "${MAYAN_HTTP_PORT:-1987}:80"
     networks:
       - mayan
     restart: unless-stopped
     volumes:
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: "mayan"
+      traefik.http.routers.mayan.rule: "Host(`${MAYAN_DOMAIN:-localhost}`)"
+      traefik.http.routers.mayan.entrypoints: "https"
+      traefik.http.routers.mayan.tls: "true"
+      traefik.http.routers.mayan.tls.certresolver: "letsencrypt"
+      traefik.http.routers.mayan.service: "mayan"
+      traefik.http.routers.mayan-http.rule: "Host(`${MAYAN_DOMAIN:-localhost}`)"
+      traefik.http.routers.mayan-http.entrypoints: "http"
+      traefik.http.routers.mayan-http.middlewares: "redirect-https"
+      traefik.http.routers.mayan-http.service: "mayan"
+      traefik.http.middlewares.redirect-https.redirectscheme.scheme: "https"
+      traefik.http.middlewares.redirect-https.redirectscheme.permanent: "true"
+      traefik.http.services.mayan.loadbalancer.server.port: "80"
 
   seed:
     <<: *mayan-container
@@ -118,8 +194,3 @@ services:
     networks:
       - mayan
     restart: unless-stopped
-
-volumes:
-  app_data:
-  postgres_data:
-  redis_data:

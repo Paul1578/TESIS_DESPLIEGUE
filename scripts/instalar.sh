@@ -14,6 +14,7 @@
 #   bash instalar.sh                 # interactivo (pide password admin si quieres)
 #   INSTALL_ADMIN_PASSWORD=MiClave bash instalar.sh
 #   INSTALL_CSRF_ORIGINS=192.168.1.50 bash instalar.sh
+#   INSTALL_DOMAIN=herramientagde.byronrm.com INSTALL_ACME_EMAIL=yo@dominio.com bash instalar.sh
 #   bash instalar.sh --skip-prereqs  # si ya tenes todo instalado
 #
 # Nota: al primer arranque tarda varios minutos (migraciones + OCR + seed).
@@ -23,7 +24,7 @@ set -euo pipefail
 REPO_URL="${REPO_URL:-https://github.com/Paul1578/TESIS_DESPLIEGUE.git}"
 REPO_DIR="${MAYAN_DOCKER_DIR:-$HOME/mayan-docker}"
 WATCH_FOLDER="${WATCH_FOLDER:-/mnt/escaner}"
-HTTP_PORT_DEFAULT=80
+HTTP_PORT_DEFAULT=1987
 SKIP_PREREQS=0
 
 # ---------- helpers ----------
@@ -158,6 +159,18 @@ configure_env() {
     ok "MAYAN_AUTOADMIN_PASSWORD definida."
   fi
 
+  # Dominio publico (Traefik integrado): opcional. Solo si el usuario lo pide.
+  local domain="${INSTALL_DOMAIN:-}"
+  if [ -n "$domain" ]; then
+    set_env "MAYAN_DOMAIN" "$domain"
+    if [ -n "${INSTALL_ACME_EMAIL:-}" ]; then
+      set_env "ACME_EMAIL" "$INSTALL_ACME_EMAIL"
+    else
+      warn "INSTALL_ACME_EMAIL no definido: deja ACME_EMAIL en .env para emitir el certificado."
+    fi
+    ok "MAYAN_DOMAIN=$domain"
+  fi
+
   if grep -qE '^MAYAN_CSRF_TRUSTED_ORIGINS=' .env; then
     ok "MAYAN_CSRF_TRUSTED_ORIGINS ya definido."
   else
@@ -171,9 +184,15 @@ configure_env() {
       fi
       [ -z "$ip" ] && ip="$ip_dflt"
     fi
+    local origins
     if [ -n "$ip" ]; then
-      set_env_uncomment "MAYAN_CSRF_TRUSTED_ORIGINS" "MAYAN_CSRF_TRUSTED_ORIGINS=['http://$ip']"
-      ok "MAYAN_CSRF_TRUSTED_ORIGINS=['http://$ip']"
+      if [ -n "$domain" ]; then
+        origins="MAYAN_CSRF_TRUSTED_ORIGINS=['https://$domain', 'http://$ip']"
+      else
+        origins="MAYAN_CSRF_TRUSTED_ORIGINS=['http://$ip']"
+      fi
+      set_env_uncomment "MAYAN_CSRF_TRUSTED_ORIGINS" "$origins"
+      ok "$origins"
     else
       warn "No se pudo detectar la IP; dejala configurada en .env si el login falla por CSRF."
     fi
@@ -237,13 +256,22 @@ wait_seed() {
 
 # ---------- resumen ----------
 print_summary() {
-  local port
+  local port domain traefik_http
   port="$(http_port)"; [ -n "$port" ] || port="$HTTP_PORT_DEFAULT"
+  domain="$(grep -E '^MAYAN_DOMAIN=' .env 2>/dev/null | cut -d= -f2- | tr -d ' ')"
+  traefik_http="$(grep -E '^TRAEFIK_HTTP_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d ' ')"
+  [ -n "$traefik_http" ] || traefik_http="80"
   echo
   ok "=========================================================="
   ok "  Mayan EDMS desplegado"
   ok "=========================================================="
-  info "URL:        http://<IP-de-este-servidor>:${port}"
+  info "URL LAN:    http://<IP-de-este-servidor>:${port}"
+  if [ -n "$domain" ]; then
+    info "URL PUB:    https://${domain}  (via Traefik integrado, cert Let's Encrypt)"
+    info "Traefik:    http://<IP>:${traefik_http}  ->  https://${domain}"
+  else
+    info "Publico:    (sin MAYAN_DOMAIN) acceso solo por LAN. Agrega MAYAN_DOMAIN en .env para https."
+  fi
   info "Admin:      admin"
   info "Password:   la de MAYAN_AUTOADMIN_PASSWORD en $REPO_DIR/.env"
   info "Watch:      $WATCH_FOLDER  (los PDFs que caigan se ingieren en <=30s)"
@@ -256,9 +284,6 @@ print_summary() {
   info "  make seed     # re-ejecutar el seed (idempotente)"
   info "  make clean    # BORRA TODO (documentos y BD)"
   echo
-  info "Acceso externo (opcional):"
-  info "  cloudflared tunnel --url http://127.0.0.1:${port} --logfile ~/cloudflared.log &"
-  info "  Luego agregar la URL a MAYAN_CSRF_TRUSTED_ORIGINS en .env y: docker compose up -d"
 }
 
 usage() {

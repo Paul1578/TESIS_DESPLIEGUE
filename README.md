@@ -1,10 +1,19 @@
 # TESIS_DESPLIEGUE — Mayan EDMS
 
-Despliegue de Mayan EDMS 4.11.5 con Docker Compose. Incluye PostgreSQL, Redis,
-Mailpit (SMTP de prueba) y una imagen construida con parches locales.
+Despliegue reproducible de Mayan EDMS 4.11.5 con Docker Compose en cualquier
+servidor (tenga o no Traefik previo). Incluye PostgreSQL, Redis, Mailpit (SMTP
+de prueba), un **Traefik integrado** (HTTPS con Let's Encrypt) y una imagen
+construida con parches locales.
 
 - Imagen pública (sin login): `ghcr.io/paul1578/mayan-edms-preprod:latest`
 - Repo: `https://github.com/Paul1578/TESIS_DESPLIEGUE.git`
+
+## Modos de despliegue
+
+| Modo | Cuándo | Cómo |
+|---|---|---|
+| **Compose (recomendado, reproducible)** | Cualquier servidor: limpio o con Traefik en otros puertos | `docker-compose.yml` incluye su propio Traefik (80/443 configurables) |
+| **Swarm (`swarm/`)** | Host que YA tiene un Traefik Swarm ocupando 80/443 (ej. Contabo `161.97.140.245`) | `docker stack deploy -c swarm/mayan-stack.yml mayan` (ver `swarm/README.md`) |
 
 ---
 
@@ -20,14 +29,15 @@ bash instalar.sh
 Ese script hace los pasos 1 a 5 del manual automáticamente e **idempotente**
 (vuelve a ejecutarlo las veces que quieras; no duplica nada): instala
 git/make/Docker, crea `/mnt/escaner`, clona el repo, genera el `.env`
-(secret key + password admin + CSRF con tu IP), levanta el stack, espera a que
-Mayan responda y verifica la siembra.
+(secret key + password admin + CSRF con tu IP), levanta el stack (incluye el
+Traefik), espera a que Mayan responda y verifica la siembra.
 
 Variantes:
 
 ```
 INSTALL_ADMIN_PASSWORD=MiClaveSegura bash instalar.sh      # no pregunta nada
 INSTALL_CSRF_ORIGINS=192.168.1.50 bash instalar.sh         # fuerza la IP del CSRF
+INSTALL_DOMAIN=herramientagde.byronrm.com INSTALL_ACME_EMAIL=tu@correo.com bash instalar.sh  # HTTPS publico
 bash instalar.sh --skip-prereqs                            # si ya tienes todo instalado
 ```
 
@@ -93,7 +103,10 @@ Valores obligatorios (los demás ya traen defaults razonables):
 |---|---|---|
 | `MAYAN_SECRET_KEY` | Clave de Django (obligatoria) | `openssl rand -base64 64` |
 | `MAYAN_AUTOADMIN_PASSWORD` | Password del admin inicial (solo se usa la primera vez) | una password fuerte |
-| `MAYAN_HTTP_PORT` | Puerto HTTP donde escucha Mayan | `80` en servidor, `18080` en PC local si el 80 está ocupado |
+| `MAYAN_HTTP_PORT` | Puerto LAN del nginx (acceso por IP, sin Traefik) | `1987` |
+| `MAYAN_DOMAIN` | Dominio/subdominio público para HTTPS | vacío (solo LAN) o `herramientagde.byronrm.com` |
+| `ACME_EMAIL` | Correo para Let's Encrypt (si hay dominio) | `tu@correo.com` |
+| `TRAEFIK_HTTP_PORT` / `TRAEFIK_HTTPS_PORT` | Puertos host del Traefik | `80` / `443` (cámbialos si el host ya los usa) |
 
 Generar la clave secreta (opcional, en otra terminal):
 ```
@@ -119,6 +132,11 @@ Hay dos formas de obtener la imagen:
 
 - **Local / desarrollo:** construye la imagen con los parches en tu máquina.
 - **Servidor:** baja la imagen ya construida desde GHCR (pública, sin login).
+
+> El stack incluye su propio Traefik: en un servidor con 80/443 libres, al
+> levantar con `MAYAN_DOMAIN` configurado el sitio queda en `https://<dominio>`.
+> Si el host ya usa 80/443, cambia `TRAEFIK_HTTP_PORT`/`TRAEFIK_HTTPS_PORT` o
+> usa el modo Swarm (`swarm/`).
 
 ### Local (PC de desarrollo)
 
@@ -167,7 +185,8 @@ make clean        # apagar y borrar VOLUMENES (borra documentos y BD). ¡CUIDADO
 
 | Servicio | URL |
 |---|---|
-| Mayan EDMS | `http://IP_MAQUINA:MAYAN_HTTP_PORT` |
+| Mayan EDMS (público) | `https://MAYAN_DOMAIN` (si `MAYAN_DOMAIN` está definido) |
+| Mayan EDMS (LAN) | `http://IP_MAQUINA:MAYAN_HTTP_PORT` |
 | Mailpit (correos capturados) | `http://IP_MAQUINA:8025` |
 
 Credenciales de administrador: `MAYAN_AUTOADMIN_USERNAME` / `MAYAN_AUTOADMIN_PASSWORD`
@@ -200,11 +219,29 @@ Los PDFs que caigan en `WATCH_FOLDER` del host se montan en
 Si el escáner escribe por red (SMB/NFS), monta el recurso en el host primero
 y luego la variable `WATCH_FOLDER` debe apuntar al punto de montaje.
 
-### Reverse proxy (Nginx) y tamaño de subida
-El stack incluye un Nginx delante de Mayan (`MAYAN_HTTP_PORT` es el puerto
-expuesto). Permite subidas de hasta **500 MB** (`client_max_body_size` en
+### Reverse proxy y tamaño de subida
+El stack incluye dos capas: **Traefik** (gateway público, HTTPS) delante de
+**Nginx** (reverse proxy hacia la app, `MAYAN_HTTP_PORT` como puerto LAN).
+Nginx permite subidas de hasta **500 MB** (`client_max_body_size` en
 `nginx/default.conf`). El túnel de Cloudflare gratuito limita las subidas a
-~100 MB; documentos más pesados funcionan por la red local pero no por el túnel.
+~100 MB; documentos más pesados funcionan por la red local o por Traefik.
+
+### Acceso público (HTTPS con Traefik integrado)
+Para publicar el sistema por internet:
+
+1. Configura en el `.env`: `MAYAN_DOMAIN=tu.subdominio.com` y `ACME_EMAIL=tu@correo.com`.
+2. El DNS del dominio debe resolver a la IP del servidor (registro A).
+3. Abre los puertos `80` y `443` (TCP) en el firewall del servidor.
+4. Recarga el stack: `docker compose up -d`. Traefik emite el certificado
+   Let's Encrypt automáticamente y redirige HTTP → HTTPS.
+5. Agrega el origen a `MAYAN_CSRF_TRUSTED_ORIGINS` en el `.env`
+   (ej. `['https://tu.subdominio.com', 'http://IP:MAYAN_HTTP_PORT']`) y vuelve a recargar.
+
+> Si el servidor ya tiene otro servicio en 80/443 (p. ej. un Traefik Swarm),
+> cambia `TRAEFIK_HTTP_PORT`/`TRAEFIK_HTTPS_PORT` o usa `swarm/` (integración
+> con el Traefik existente, ver `swarm/README.md`). Como último recurso
+> (redes que bloquean 80/443) queda el túnel:
+> `cloudflared tunnel --url http://127.0.0.1:MAYAN_HTTP_PORT`.
 
 ### Correo (SMTP)
 Por defecto usa **Mailpit** (SMTP de prueba): los correos no salen a nadie y
@@ -213,11 +250,3 @@ se ven en `http://IP:8025`. Para enviar correos reales con Gmail:
 1. En tu cuenta de Google activa la **verificación en 2 pasos**.
 2. Genera un **password de aplicación** (Google → Seguridad → Passwords de aplicaciones).
 3. En el `.env`, descomenta y completa el bloque Gmail (ver `.env.example`).
-
-### Acceso desde fuera (túnel Cloudflare)
-```
-cloudflared tunnel --url http://127.0.0.1:MAYAN_HTTP_PORT
-```
-Da una URL `https://xxx.trycloudflare.com`. Configura
-`MAYAN_CSRF_TRUSTED_ORIGINS` en el `.env` con esa URL (ver `.env.example`).
-Es un *quick tunnel*: la URL cambia en cada reinicio del servicio.
