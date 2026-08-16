@@ -44,12 +44,6 @@ x-mayan: &mayan
     MAYAN_DOCKER_WAIT: ${MAYAN_DOCKER_WAIT:-postgresql:5432 redis:6379}
     MAYAN_APT_INSTALLS: ${MAYAN_APT_INSTALLS:-tesseract-ocr-spa}
     MAYAN_OCR_LANGUAGE: ${MAYAN_OCR_LANGUAGE:-spa}
-  healthcheck:
-    test: ["CMD-SHELL", "/opt/mayan-edms/bin/python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/', timeout=5)\""]
-    interval: 30s
-    timeout: 10s
-    retries: 5
-    start_period: 120s
   networks:
     - mayan-net
   volumes:
