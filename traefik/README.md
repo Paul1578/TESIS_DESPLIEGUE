@@ -1,4 +1,10 @@
-# Traefik — gateway para herramientagde.byronrm.com
+# Traefik — gateway standalone para herramientagde.byronrm.com
+
+> **ATENCION:** este stack de Traefik standalone (compose, imagen v3) es para
+> servidores que NO tienen un Traefik previo. En el servidor Contabo
+> (161.97.140.245) **ya existe un Traefik de Swarm** que ocupa los puertos
+> 80/443 y rutea por labels; ahi NO se levanta este compose, se usa
+> `swarm/mayan-stack.yml` + `swarm/README.md`.
 
 Expone el stack Mayan de este repo por HTTPS en el subdominio
 `https://herramientagde.byronrm.com` (certificado Let's Encrypt).
