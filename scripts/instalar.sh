@@ -212,12 +212,35 @@ configure_env() {
   fi
 }
 
+# ---------- Paso 3b ----------
+# Fix: Traefik exige /acme.json con permisos 600. Con volumen nombrado Docker
+# puede dejarlo en 755 (heredado de la imagen) y el resolver letsencrypt falla.
+fix_traefik_acme_perms() {
+  local proj vol
+  proj="$(basename "$PWD")"
+  vol="${proj}_traefik_acme"
+  if $DOCK volume ls --format '{{.Name}}' | grep -qx "$vol"; then
+    $DOCK run --rm -u root -v "${vol}:/data" alpine \
+      sh -c 'touch /data/acme.json && chmod 600 /data/acme.json && chown 65532:65532 /data/acme.json' >/dev/null 2>&1 \
+      || warn "No se pudo ajustar permisos de $vol (lo arreglara traefik si hace falta)."
+    ok "Permisos de $vol/acme.json ajustados a 600."
+  fi
+}
+
 # ---------- Paso 4 ----------
 http_port() { grep -E '^MAYAN_HTTP_PORT=' .env 2>/dev/null | cut -d= -f2- | tr -d ' '; }
 
 start_stack() {
   info "Levantando el stack (primer arranque: varios minutos)..."
   $DOCK compose up -d
+
+  # Traefik necesita /acme.json con permisos 600 para el resolver letsencrypt.
+  # Con volumen nombrado Docker puede heredar 755 de la imagen -> la emision
+  # de certificados falla silenciosamente. Lo dejamos en 600 tras el up -d.
+  fix_traefik_acme_perms
+
+  # Recrear traefik para que detecte el archivo con los permisos correctos.
+  $DOCK compose up -d traefik
 }
 
 wait_http() {
