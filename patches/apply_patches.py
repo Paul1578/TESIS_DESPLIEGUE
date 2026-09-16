@@ -37,6 +37,51 @@ PATCHES = [
         'old': '<script src="{% static \'appearance/js/partial_navigation.js\' %}" type="text/javascript"></script>',
         'new': '<script src="{% static \'appearance/js/partial_navigation.js\' %}" type="text/javascript"></script>\n\n<script>\n(function ($) {\n    \'use strict\';\n\n    var $overlay;\n\n    function ensureOverlay() {\n        if (!$overlay || !$.contains(document, $overlay[0])) {\n            $overlay = $(\'<div id="appearance-dropdown-overlay"></div>\').css({\n                \'position\': \'fixed\',\n                \'left\': \'0\',\n                \'top\': \'0\',\n                \'width\': \'0\',\n                \'height\': \'0\',\n                \'overflow\': \'visible\',\n                \'z-index\': \'2000\'\n            }).appendTo(document.body);\n        }\n        return $overlay;\n    }\n\n    function isPortaled($dropdown) {\n        if ($dropdown.is(\'#multi-item-actions\')) {\n            return true;\n        }\n        return $dropdown.children(\'.dropdown-menu\').hasClass(\'appearance-dropdown-menu-slim\');\n    }\n\n    function portalMenu($dropdown, $menu) {\n        var $overlayEl = ensureOverlay();\n        var menu = $menu[0];\n        var rect = $dropdown[0].getBoundingClientRect();\n        var menuWidth = menu.offsetWidth || 200;\n        var menuHeight = menu.offsetHeight || 100;\n        var winWidth = window.innerWidth || 1024;\n        var winHeight = window.innerHeight || 768;\n        var left = rect.left;\n        if (left + menuWidth > winWidth - 8) {\n            left = Math.max(8, rect.right - menuWidth);\n        }\n        var top = rect.bottom;\n        if (top + menuHeight > winHeight - 8) {\n            top = Math.max(8, rect.top - menuHeight);\n        }\n        $menu.data(\'appearance-dropdown-portal\', $dropdown);\n        $dropdown.data(\'appearance-dropdown-portaled\', true);\n        $menu.detach().appendTo($overlayEl).css({\n            \'position\': \'fixed\',\n            \'left\': left + \'px\',\n            \'top\': top + \'px\',\n            \'width\': menuWidth + \'px\',\n            \'margin\': \'0\',\n            \'z-index\': \'2000\',\n            \'display\': \'block\'\n        });\n    }\n\n    function restoreMenu($dropdown) {\n        var $menu = $dropdown.children(\'.dropdown-menu\');\n        if (!$menu.length) {\n            $menu = ensureOverlay().find(\'.dropdown-menu\').filter(function () {\n                return $(this).data(\'appearance-dropdown-portal\') && $(this).data(\'appearance-dropdown-portal\')[0] === $dropdown[0];\n            }).first();\n        }\n        $dropdown.removeData(\'appearance-dropdown-portaled\');\n        if (!$menu.length) {\n            return;\n        }\n        var $parent = $menu.data(\'appearance-dropdown-portal\');\n        $menu.removeData(\'appearance-dropdown-portal\');\n        if ($parent && $parent.length && $.contains(document, $parent[0])) {\n            $menu.appendTo($parent).removeAttr(\'style\');\n        } else {\n            $menu.remove();\n        }\n    }\n\n    function afterShown(fn) {\n        if (typeof queueMicrotask === \'function\') {\n            queueMicrotask(fn);\n        } else {\n            window.setTimeout(fn, 0);\n        }\n    }\n\n    $(document).on(\'shown.bs.dropdown\', function (event) {\n        var $dropdown = $(event.target).closest(\'.dropdown, #multi-item-actions\').first();\n        if (!$dropdown.length) {\n            return;\n        }\n        if (!isPortaled($dropdown)) {\n            return;\n        }\n        afterShown(function () {\n            var $menu = $dropdown.children(\'.dropdown-menu\');\n            if (!$dropdown.hasClass(\'open\') || !$menu.length) {\n                return;\n            }\n            portalMenu($dropdown, $menu);\n        });\n    });\n\n    $(document).on(\'hidden.bs.dropdown\', function (event) {\n        var $dropdown = $(event.target).closest(\'.dropdown, #multi-item-actions\').first();\n        if (!$dropdown.length) {\n            return;\n        }\n        if (!$dropdown.data(\'appearance-dropdown-portaled\')) {\n            return;\n        }\n        restoreMenu($dropdown);\n    });\n\n    $(document).on(\'updated\', \'#ajax-content\', function () {\n        if ($overlay && $.contains(document, $overlay[0])) {\n            $overlay.children(\'.dropdown-menu\').remove();\n        }\n    });\n})(jQuery);\n</script>\n',
     },
+    {
+        'path': pathlib.Path('/opt/mayan-edms/lib/python3.13/site-packages/mayan/apps/views/view_mixins.py'),
+        'marker': 'multi-object-no-id-list-redirect',
+        'old': """    def dispatch(self, request, *args, **kwargs):
+        self.object_list = self.get_object_list()
+        if self.view_mode_single:
+            self.object = self.get_object_first()
+
+        return super().dispatch(request=request, *args, **kwargs)""",
+        'new': """    def dispatch(self, request, *args, **kwargs):
+        try:
+            self.object_list = self.get_object_list()
+            if self.view_mode_single:
+                self.object = self.get_object_first()
+        except AttributeError:
+            # Redirigir en vez de devolver un 500 cuando la vista multi-objeto
+            # (ej. la papelera) llega sin pk, slug o id_list (por ejemplo si
+            # se dispara la accion masiva sin seleccionar ningun documento).
+            return HttpResponseRedirect(
+                request.META.get('HTTP_REFERER', reverse(viewname=setting_home_view.value))
+            )
+
+        return super().dispatch(request=request, *args, **kwargs)""",
+    },
+    {
+        'path': pathlib.Path('/opt/mayan-edms/lib/python3.13/site-packages/mayan/apps/appearance/static/appearance/js/mayan_app.js'),
+        'marker': 'multi-object-action-require-selection',
+        'old': """            const url = new URL(href, window.location.origin);
+            url.searchParams.set(
+                app.options.multiItemActionsPrimaryKey, idList
+            );
+
+            $this.attr('href', `${url.pathname}${url.search}`);""",
+        'new': """            if (idList.length === 0) {
+                event.preventDefault();
+                return;
+            }
+
+            const url = new URL(href, window.location.origin);
+            url.searchParams.set(
+                app.options.multiItemActionsPrimaryKey, idList
+            );
+
+            $this.attr('href', `${url.pathname}${url.search}`);""",
+    },
 ]
 
 
