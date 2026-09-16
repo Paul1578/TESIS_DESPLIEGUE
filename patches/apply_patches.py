@@ -64,23 +64,38 @@ PATCHES = [
     {
         'path': pathlib.Path('/opt/mayan-edms/lib/python3.13/site-packages/mayan/apps/appearance/static/appearance/js/mayan_app.js'),
         'marker': 'multi-object-action-require-selection',
-        'old': """            const url = new URL(href, window.location.origin);
-            url.searchParams.set(
-                app.options.multiItemActionsPrimaryKey, idList
-            );
+        'old': """        $('body').on('click', '#multi-item-actions .navigation-btn-dropdown', function (event) {
+            const $this = $(this);
+            const href = $this.attr('href');
+            let idList = [];
 
-            $this.attr('href', `${url.pathname}${url.search}`);""",
-        'new': """            if (idList.length === 0) {
+            $('.check-all-slave:checked').each(function (index, value) {
+                // Split the name (ie:"pk_200") and extract only the ID.
+                idList.push(
+                    value.name.split('_')[1]
+                );
+            });
+
+            const url = new URL(href, window.location.origin);""",
+        'new': """        $('body').on('click', '#multi-item-actions .navigation-btn-dropdown, #appearance-dropdown-overlay .navigation-btn-dropdown', function (event) {
+            const $this = $(this);
+            const href = $this.attr('href');
+            let idList = [];
+
+            $('.check-all-slave:checked').each(function (index, value) {
+                // Split the name (ie:"pk_200") and extract only the ID.
+                idList.push(
+                    value.name.split('_')[1]
+                );
+            });
+
+            if (idList.length === 0) {
                 event.preventDefault();
+                event.stopImmediatePropagation();
                 return;
             }
 
-            const url = new URL(href, window.location.origin);
-            url.searchParams.set(
-                app.options.multiItemActionsPrimaryKey, idList
-            );
-
-            $this.attr('href', `${url.pathname}${url.search}`);""",
+            const url = new URL(href, window.location.origin);""",
     },
 ]
 
